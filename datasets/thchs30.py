@@ -25,8 +25,8 @@ def build_from_path(in_dir, out_dir, num_workers=1, tqdm=lambda x: x):
   futures = []
   index = 1
 
-  # trn_files = glob.glob(os.path.join(in_dir, 'data', '*.trn'))
-  trn_files = glob.glob(os.path.join(in_dir, 'xmly_record', 'A*', '*.trn'))
+  trn_files = glob.glob(os.path.join(in_dir, 'data', '*.trn'))
+  # trn_files = glob.glob(os.path.join(in_dir, 'xmly_record', 'A*', '*.trn'))
 
   for trn in trn_files:
     with open(trn) as f:

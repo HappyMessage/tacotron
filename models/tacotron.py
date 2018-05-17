@@ -6,9 +6,8 @@ from util.infolog import log
 from .attention import LocationSensitiveAttention
 from .helpers import TacoTestHelper, TacoTrainingHelper
 from .modules import conv_and_lstm, postnet
-from .rnn_wrappers import DecoderPrenetWrapper, ConcatOutputAndAttentionWrapper
-
-
+from .rnn_wrappers import PrenetCell, FrameProjectionCell, TacotronDecoderCell
+from tensorflow.python.ops import rnn_cell_impl
 
 class Tacotron():
   def __init__(self, hparams):
@@ -54,34 +53,36 @@ class Tacotron():
         is_training=is_training,
         scope='encoder')                                                         # [N, T_in, 512]
 
-      # Attention
-      attention_cell = AttentionWrapper(
-        DecoderPrenetWrapper(LSTMBlockCell(hp.attention_depth), is_training),
-        LocationSensitiveAttention(hp.attention_depth, encoder_outputs),
-        alignment_history=True,
-        output_attention=False)                                                  # [N, T_in, 128]
+      # Decoder prenet
+      decoder_prenet = PrenetCell(is_training, scope='decoder_prenet')           # [N, T_in, 256]
 
-      # Concatenate attention context vector and RNN cell output into a 512D vector.
-      concat_cell = ConcatOutputAndAttentionWrapper(attention_cell)              # [N, T_in, 512]
+      # Attention
+      attention_mechanism = LocationSensitiveAttention(hp.attention_depth, encoder_outputs)
 
       # Decoder (layers specified bottom to top):
-      decoder_cell = MultiRNNCell([
-        concat_cell,
+      decoder_lstm = MultiRNNCell([
         LSTMBlockCell(hp.decoder_lstm_units),
         LSTMBlockCell(hp.decoder_lstm_units)
-      ], state_is_tuple=True)                                                  # [N, T_in, 1024]
+      ], state_is_tuple=True)                                                    # [N, T_in, 1024]
 
       # Project onto r mel spectrograms (predict r outputs at each RNN step):
-      output_cell = OutputProjectionWrapper(decoder_cell, hp.num_mels * hp.outputs_per_step)
+      frame_projection = FrameProjectionCell(hp.num_mels * hp.outputs_per_step)  # [N, T_in, M*r]
+
+      # Decoder wrapper
+      decoder_cell = TacotronDecoderCell(
+        decoder_prenet,
+        attention_mechanism,
+        decoder_lstm,
+        frame_projection)                                                        # [N, T_in, M*r]
 
       if is_training:
         helper = TacoTrainingHelper(inputs, mel_targets, hp.num_mels, hp.outputs_per_step)
       else:
         helper = TacoTestHelper(batch_size, hp.num_mels, hp.outputs_per_step)
 
-      decoder_init_state = output_cell.zero_state(batch_size=batch_size, dtype=tf.float32)
+      decoder_init_state = decoder_cell.zero_state(batch_size=batch_size, dtype=tf.float32)
       (multi_decoder_outputs, _), final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(
-        BasicDecoder(output_cell, helper, decoder_init_state),
+        BasicDecoder(decoder_cell, helper, decoder_init_state),
         maximum_iterations=hp.max_iters)                                        # [N, T_out/r, M*r]
 
       # Reshape outputs to be one output per entry                                [N, T_out, M]
@@ -109,21 +110,19 @@ class Tacotron():
       linear_outputs = tf.layers.dense(expand_outputs, hp.num_freq)            # [N, T_out, F]
 
       # Grab alignments from the final decoder state:
-      alignments = tf.transpose(final_decoder_state[0].alignment_history.stack(), [1, 2, 0])
+      alignments = tf.transpose(final_decoder_state.alignment_history.stack(), [1, 2, 0])
 
       self.inputs = inputs
       self.input_lengths = input_lengths
       self.decoder_outputs = decoder_outputs
       self.mel_outputs = mel_outputs
       self.linear_outputs = linear_outputs
+      self.linear_targets = linear_targets
       self.alignments = alignments
       self.mel_targets = mel_targets
-      self.linear_targets = linear_targets
       log('Initialized Tacotron model. Dimensions: ')
       log('  embedding:               %d' % embedded_inputs.shape[-1])
       log('  encoder out:             %d' % encoder_outputs.shape[-1])
-      log('  attention out:           %d' % attention_cell.output_size)
-      log('  concat attn & out:       %d' % concat_cell.output_size)
       log('  decoder cell out:        %d' % decoder_cell.output_size)
       log('  decoder out (%d frames):  %d' % (hp.outputs_per_step, decoder_outputs.shape[-1]))
       log('  decoder out (1 frame):   %d' % mel_outputs.shape[-1])
@@ -135,6 +134,7 @@ class Tacotron():
     '''Adds loss to the model. Sets "loss" field. initialize must have been called.'''
     with tf.variable_scope('loss') as scope:
       hp = self._hparams
+
       self.decoder_loss = tf.reduce_mean(tf.abs(self.mel_targets - self.decoder_outputs))
       self.mel_loss = tf.reduce_mean(tf.abs(self.mel_targets - self.mel_outputs))
 

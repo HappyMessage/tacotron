@@ -45,7 +45,7 @@ def main():
   parser = argparse.ArgumentParser()
   parser.add_argument('--base_dir', default=os.path.expanduser('.'))
   parser.add_argument('--output', default='training')
-  parser.add_argument('--dataset', required=True, choices=['blizzard', 'ljspeech', 'thchs30', 'xmlynews'])
+  parser.add_argument('--dataset', required=True, choices=['blizzard', 'ljspeech', 'thchs30'])
   parser.add_argument('--num_workers', type=int, default=cpu_count())
   args = parser.parse_args()
   if args.dataset == 'blizzard':
@@ -54,8 +54,6 @@ def main():
     preprocess_ljspeech(args)
   elif args.dataset == 'thchs30':
     preprocess_thchs30(args)
-  elif args.dataset == 'xmlynews':
-    preprocess_xmlynews(args)
 
 
 if __name__ == "__main__":

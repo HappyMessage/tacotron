@@ -18,6 +18,9 @@ hparams = tf.contrib.training.HParams(
   min_level_db=-100,
   ref_level_db=20,
 
+  symmetric_mels = True,
+  max_abs_value = 4.,
+
   # Model:
   outputs_per_step=5,
 

@@ -16,6 +16,15 @@ def save_wav(wav, path):
   librosa.output.write_wav(path, wav.astype(np.float32), hparams.sample_rate)
 
 
+def trim_silence(wav):
+  '''Trim leading and trailing silence
+
+  Useful for M-AILABS dataset if we choose to trim the extra 0.5 silences.
+  '''
+  _, hop_length, win_length = _stft_parameters()
+  return librosa.effects.trim(wav, frame_length=win_length, hop_length=hop_length)[0]
+
+
 def spectrogram(y):
   D = _stft(y)
   S = _amp_to_db(np.abs(D)) - hparams.ref_level_db
@@ -141,12 +150,26 @@ def _db_to_amp_tensorflow(x):
 
 
 def _normalize(S):
-  return np.clip((S - hparams.min_level_db) / -hparams.min_level_db, 0, 1)
+  if hparams.symmetric_mels:
+    return np.clip((2 * hparams.max_abs_value) * ((S - hparams.min_level_db) / (-hparams.min_level_db)) - hparams.max_abs_value,
+     -hparams.max_abs_value, hparams.max_abs_value)
+  else:
+    return np.clip(hparams.max_abs_value * ((S - hparams.min_level_db) / (-hparams.min_level_db)), 0, hparams.max_abs_value)
 
 
-def _denormalize(S):
-  return (np.clip(S, 0, 1) * -hparams.min_level_db) + hparams.min_level_db
+def _denormalize(D):
+  if hparams.symmetric_mels:
+    return (((np.clip(D, -hparams.max_abs_value,
+      hparams.max_abs_value) + hparams.max_abs_value) * -hparams.min_level_db / (2 * hparams.max_abs_value))
+      + hparams.min_level_db)
+  else:
+    return ((np.clip(D, 0, hparams.max_abs_value) * -hparams.min_level_db / hparams.max_abs_value) + hparams.min_level_db)
 
 
-def _denormalize_tensorflow(S):
-  return (tf.clip_by_value(S, 0, 1) * -hparams.min_level_db) + hparams.min_level_db
+def _denormalize_tensorflow(D):
+  if hparams.symmetric_mels:
+    return (((tf.clip_by_value(D, -hparams.max_abs_value,
+      hparams.max_abs_value) + hparams.max_abs_value) * -hparams.min_level_db / (2 * hparams.max_abs_value))
+      + hparams.min_level_db)
+  else:
+    return ((tf.clip_by_value(D, 0, hparams.max_abs_value) * -hparams.min_level_db / hparams.max_abs_value) + hparams.min_level_db)

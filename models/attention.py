@@ -11,8 +11,8 @@ class LocationSensitiveAttention(BahdanauAttention):
                num_units,
                memory,
                memory_sequence_length=None,
-               filters=20,
-               kernel_size=7,
+               filters=32,
+               kernel_size=(31,),
                name='LocationSensitiveAttention'):
     '''Construct the Attention mechanism. See superclass for argument details.'''
     super(LocationSensitiveAttention, self).__init__(
@@ -36,6 +36,7 @@ class LocationSensitiveAttention(BahdanauAttention):
       alignments: Tensor of shape `[N, T_in]`
       next_state: Tensor of shape `[N, T_in]`
     '''
+    previous_alignments = state
     with tf.variable_scope(None, 'location_sensitive_attention', [query]):
       expanded_alignments = tf.expand_dims(state, axis=2)               # [N, T_in, 1]
       f = self.location_conv(expanded_alignments)                       # [N, T_in, 10]
@@ -45,7 +46,7 @@ class LocationSensitiveAttention(BahdanauAttention):
       processed_query = tf.expand_dims(processed_query, axis=1)         # [N, 1, num_units]
       score = _location_sensitive_score(processed_query, processed_location, self.keys)
     alignments = self._probability_fn(score, state)
-    next_state = alignments
+    next_state = alignments + previous_alignments
     return alignments, next_state
 
 

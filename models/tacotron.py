@@ -135,15 +135,26 @@ class Tacotron():
     with tf.variable_scope('loss') as scope:
       hp = self._hparams
 
-      self.decoder_loss = tf.reduce_mean(tf.abs(self.mel_targets - self.decoder_outputs))
-      self.mel_loss = tf.reduce_mean(tf.abs(self.mel_targets - self.mel_outputs))
+      # Compute loss of predictions before postnet
+      self.decoder_loss = tf.losses.mean_squared_error(self.mel_targets, self.decoder_outputs)
+      # Compute loss after postnet
+      self.mel_loss = tf.losses.mean_squared_error(self.mel_targets, self.mel_outputs)
 
       # Prioritize loss for frequencies under 2000 Hz.
       l1 = tf.abs(self.linear_targets - self.linear_outputs)
       n_priority_freq = int(2000 / (hp.sample_rate * 0.5) * hp.num_freq)
       self.linear_loss = 0.5 * tf.reduce_mean(l1) + 0.5 * tf.reduce_mean(l1[:,:,0:n_priority_freq])
 
-      self.loss = self.decoder_loss + self.mel_loss + self.linear_loss
+      # Compute the regularization weight
+      reg_weight_scaler = 1. / (2 * hp.max_abs_value) if hp.symmetric_mels else 1. / (hp.max_abs_value)
+      reg_weight = 1e-6 * reg_weight_scaler
+
+      # Get all trainable variables
+      all_vars = tf.trainable_variables()
+      self.regularization_loss = tf.add_n([tf.nn.l2_loss(v) for v in all_vars
+        if not('bias' in v.name or 'Bias' in v.name)]) * reg_weight
+
+      self.loss = self.decoder_loss + self.mel_loss + self.linear_loss + self.regularization_loss
 
 
   def add_optimizer(self, global_step):

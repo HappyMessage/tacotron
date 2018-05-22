@@ -55,6 +55,14 @@ def _location_sensitive_score(processed_query, processed_location, keys):
   Based on _bahdanau_score from tensorflow/contrib/seq2seq/python/ops/attention_wrapper.py
   '''
   # Get the number of hidden units from the trailing dimension of keys
-  num_units = keys.shape[2].value or array_ops.shape(keys)[2]
-  v = tf.get_variable('attention_v', [num_units], dtype=processed_query.dtype)
-  return tf.reduce_sum(v * tf.tanh(keys + processed_query + processed_location), [2])
+  dtype = processed_query.dtype
+  num_units = keys.shape[-1].value or array_ops.shape(keys)[-1]
+
+  v_a = tf.get_variable(
+    'attention_variable', shape=[num_units], dtype=dtype,
+    initializer=tf.contrib.layers.xavier_initializer())
+  b_a = tf.get_variable(
+    'attention_bias', shape=[num_units], dtype=dtype,
+    initializer=tf.zeros_initializer())
+
+  return tf.reduce_sum(v_a * tf.tanh(processed_query + processed_location + keys + b_a), [2])

@@ -1,7 +1,6 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.contrib.seq2seq import Helper
-from datasets.datafeeder import _pad
 
 
 # Adapted from tf.contrib.seq2seq.GreedyEmbeddingHelper
@@ -73,7 +72,7 @@ class TacoTrainingHelper(Helper):
 
   def next_inputs(self, time, outputs, state, sample_ids, name=None):
     with tf.name_scope(name or 'TacoTrainingHelper'):
-      finished = tf.reduce_all(tf.equal(self._targets[:, time], [_pad]), axis=1)
+      finished = (time + 1 >= self._lengths)
       next_inputs = self._targets[:, time, :]
       return (finished, next_inputs, state)
 

@@ -1,3 +1,5 @@
+# Note this repo is only for ablation study. The synthesis effects are not tested yet. Please do NOT use it as a complete solution!!
+
 # Tacotron
 
 An implementation of Tacotron speech synthesis in TensorFlow.

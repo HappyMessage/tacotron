@@ -2,7 +2,7 @@ import argparse
 import os
 from multiprocessing import cpu_count
 from tqdm import tqdm
-from datasets import blizzard, ljspeech, thchs30
+from datasets import blizzard, ljspeech
 from hparams import hparams
 
 
@@ -22,14 +22,6 @@ def preprocess_ljspeech(args):
   write_metadata(metadata, out_dir)
 
 
-def preprocess_thchs30(args):
-  in_dir = os.path.join(args.base_dir, 'data_thchs30')
-  out_dir = os.path.join(args.base_dir, args.output)
-  os.makedirs(out_dir, exist_ok=True)
-  metadata = thchs30.build_from_path(in_dir, out_dir, args.num_workers, tqdm=tqdm)
-  write_metadata(metadata, out_dir)
-
-
 def write_metadata(metadata, out_dir):
   with open(os.path.join(out_dir, 'train.txt'), 'w', encoding='utf-8') as f:
     for m in metadata:
@@ -45,15 +37,13 @@ def main():
   parser = argparse.ArgumentParser()
   parser.add_argument('--base_dir', default=os.path.expanduser('.'))
   parser.add_argument('--output', default='training')
-  parser.add_argument('--dataset', required=True, choices=['blizzard', 'ljspeech', 'thchs30'])
+  parser.add_argument('--dataset', required=True, choices=['blizzard', 'ljspeech'])
   parser.add_argument('--num_workers', type=int, default=cpu_count())
   args = parser.parse_args()
   if args.dataset == 'blizzard':
     preprocess_blizzard(args)
   elif args.dataset == 'ljspeech':
     preprocess_ljspeech(args)
-  elif args.dataset == 'thchs30':
-    preprocess_thchs30(args)
 
 
 if __name__ == "__main__":
